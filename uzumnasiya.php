@@ -172,6 +172,34 @@ function woocommerce_uzumnasiya()
         {
             // get order by id
             $order = wc_get_order($order_id);
+
+
+            if (isset($_GET['contract_verified'])) {
+
+
+                $redirect_url = $order->get_checkout_order_received_url();
+                $order->update_status('processing'); // or 'completed'
+
+                $uzumnasiya_contract_id = get_post_meta($order_id, 'uzumnasiya_contract_id', true);
+                // Add payment details (optional)
+                $payment_method = 'uzumnasiya'; // Replace with the payment method used
+                $payment_method_title = 'Uzumnasiya'; // Replace with the payment method title
+                $transaction_id = $uzumnasiya_contract_id; // Replace with the actual transaction ID
+
+                // Add payment note
+                $order->add_order_note(sprintf(
+                    'Payment received via %s (Transaction ID: %s)',
+                    $payment_method_title,
+                    $transaction_id
+                ));
+
+                // Mark the order as paid
+                $order->payment_complete($transaction_id);
+                wp_redirect($order->get_checkout_order_received_url());
+                exit();
+
+            }
+
             // Get and Loop Over Order Items
 
             $lang_codes = ['ru_RU' => 'ru', 'en_US' => 'en', 'uz_UZ' => 'uz'];
@@ -188,9 +216,13 @@ function woocommerce_uzumnasiya()
 
             $client = $this->checkClient($billing_phone);
 
-            $redirect_url = $order->get_checkout_order_received_url();
+//            $redirect_url = $order->get_checkout_order_received_url();
 
             if (isset($_GET['month_type'])) {
+
+
+                $redirect_url = "'https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]&contract_verified=1'";
+
 
                 $data = [
                     "user_id" => $client->data->buyer_id,
@@ -306,6 +338,49 @@ HTML;
     }
 
     add_filter('woocommerce_payment_gateways', 'add_uzumnasiya_gateway');
+
+
+    /*
+    Plugin Name: Custom Order HTTP Action
+    Description: Adds a custom button to order details in admin for sending HTTP POST.
+    Version: 1.0
+    */
+
+// Add custom button link to order details page
+    function add_custom_button_to_order_details($order_id)
+    {
+        $order = wc_get_order($order_id);
+        if ($order->is_paid()) {
+            ?>
+            <a href="<?php echo esc_url(add_query_arg('uzumnasiya_verify_order_id', $order->id)); ?>"
+               class="button button-primary">Uzumnasiya shartnomani tasdiqlash</a>
+            <?php
+        }
+    }
+
+    add_action('woocommerce_admin_order_data_after_order_details', 'add_custom_button_to_order_details');
+
+// Handle the custom action
+    function handle_uzumnasiya_verify_order_id_action()
+    {
+        if (isset($_GET['uzumnasiya_verify_order_id'])) {
+            $order_id = intval($_GET['uzumnasiya_verify_order_id']);
+            // Perform your HTTP POST action here
+            // For example: wp_remote_post('https://partner-api.com', $args);
+
+
+            $order = wc_get_order($order_id);
+            $paymentType = new WC_UZUMNASIYA();
+
+            $uzumnasiya_contract_id = get_post_meta($order_id, 'uzumnasiya_contract_id', true);
+            $verify = $paymentType->verifyContract($uzumnasiya_contract_id);
+
+        }
+    }
+
+    add_action('admin_init', 'handle_uzumnasiya_verify_order_id_action');
+
+
 }
 
 
